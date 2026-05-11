@@ -2,6 +2,7 @@
 -- Apply via Supabase SQL editor or `supabase db push`.
 
 create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
 
 create type user_role as enum ('admin', 'estimator');
 create type catalog_kind as enum ('material', 'labor', 'composite');
@@ -38,8 +39,6 @@ create table catalog_items (
 create index catalog_items_active_idx on catalog_items(active);
 create index catalog_items_category_idx on catalog_items(category);
 create index catalog_items_name_trgm_idx on catalog_items using gin (name gin_trgm_ops);
--- enable trigram for fuzzy match
-create extension if not exists pg_trgm;
 
 create table catalog_sync_runs (
   id uuid primary key default gen_random_uuid(),
