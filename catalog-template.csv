@@ -1,0 +1,37 @@
+sku,name,aliases,category,subcategory,kind,unit,unit_price,labor_rate,labor_unit,min_qty,description,active
+HRD-PAV-001,Concrete Paver 6x9,"paver|concrete paver|grey paver",Hardscape,Pavers,material,sq_ft,4.50,,,0,"Standard grey concrete paver, 6x9. Price per sq ft installed area.",TRUE
+HRD-PAV-002,Travertine Paver 16x24,"travertine|stone paver",Hardscape,Pavers,material,sq_ft,9.75,,,0,"Ivory travertine paver, tumbled finish.",TRUE
+HRD-FLG-001,Flagstone Arizona Buff,"flagstone|az flagstone|buff flagstone",Hardscape,Flagstone,material,sq_ft,7.25,,,0,"Arizona buff flagstone, irregular shape, 1-1.5 in thick.",TRUE
+HRD-FLG-LAB,Flagstone Install Labor,"flagstone install|set flagstone",Hardscape,Flagstone,labor,sq_ft,,8.00,sq_ft,0,"Labor to set flagstone on mortar bed.",TRUE
+HRD-GRV-001,Decomposed Granite 1/4in Madison Gold,"dg|decomposed granite|madison gold",Hardscape,Gravel,material,ton,52.00,,,0,"1/4 in DG, Madison Gold. Approx 110 sq ft per ton at 2 in depth.",TRUE
+HRD-GRV-002,Rip Rap 3-6in,"rip rap|river rock|drainage rock",Hardscape,Gravel,material,ton,68.00,,,0,"3-6 in river rock for drainage and accents.",TRUE
+HRD-GRV-LAB,Gravel Spread Labor,"spread gravel|gravel labor",Hardscape,Gravel,labor,sq_ft,,1.25,sq_ft,0,"Spread and level gravel including weed fabric prep area.",TRUE
+HRD-WAL-001,CMU Block Wall 6ft,"block wall|cmu wall|cinder block wall",Hardscape,Walls,composite,lin_ft,68.00,42.00,lin_ft,0,"6 ft tall CMU block wall, stuccoed both sides. Includes footing.",TRUE
+HRD-WAL-002,Stack Stone Veneer,"stone veneer|stack stone",Hardscape,Walls,material,sq_ft,11.50,9.50,sq_ft,0,"Dry-stack stone veneer applied over CMU or existing wall.",TRUE
+HRD-CON-001,Concrete Slab 4in,"concrete slab|patio slab|4 inch slab",Hardscape,Concrete,composite,sq_ft,8.25,,,0,"4 in thick standard grey concrete slab with broom finish, including rebar.",TRUE
+HRD-CON-002,Concrete Stain Acid,"concrete stain|acid stain",Hardscape,Concrete,material,sq_ft,3.50,2.00,sq_ft,0,"Acid stain finish on existing concrete.",TRUE
+SFT-SOD-001,Bermuda Sod,"bermuda|sod|grass",Softscape,Turf,material,sq_ft,0.85,0.65,sq_ft,0,"Hybrid bermuda sod roll, installed.",TRUE
+SFT-SOD-002,Winter Rye Overseed,"rye|overseed|winter grass",Softscape,Turf,labor,sq_ft,,0.45,sq_ft,0,"Perennial rye overseed for winter color.",TRUE
+SFT-TRF-001,Artificial Turf 60oz,"artificial turf|fake grass|synthetic turf",Softscape,Turf,composite,sq_ft,9.50,,,0,"60 oz pet-rated artificial turf with infill and base prep.",TRUE
+SFT-TRE-001,15gal Palo Verde,"palo verde|desert museum|tree 15gal",Softscape,Trees,material,ea,135.00,55.00,ea,0,"Desert Museum palo verde, 15 gallon, planted with backfill mix.",TRUE
+SFT-TRE-002,24in Box Mesquite,"mesquite|chilean mesquite|24 box",Softscape,Trees,material,ea,395.00,125.00,ea,0,"Chilean mesquite, 24 inch box, planted and staked.",TRUE
+SFT-PLM-001,Mexican Fan Palm 10ft,"fan palm|mexican fan palm|palm",Softscape,Palms,composite,ea,425.00,,,0,"Mexican fan palm, 10 ft brown trunk. Includes planting and stake.",TRUE
+SFT-SHR-001,5gal Texas Sage,"texas sage|leucophyllum|5 gal shrub",Softscape,Shrubs,material,ea,28.00,15.00,ea,0,"5 gallon Texas sage / leucophyllum.",TRUE
+SFT-SHR-002,1gal Lantana,"lantana|1 gal lantana",Softscape,Shrubs,material,ea,11.00,7.00,ea,0,"1 gallon lantana, assorted colors.",TRUE
+SFT-CAC-001,Golden Barrel Cactus 18in,"golden barrel|barrel cactus",Softscape,Cactus,material,ea,165.00,45.00,ea,0,"Golden barrel cactus, 18 in diameter.",TRUE
+SFT-CAC-002,Saguaro 5ft,"saguaro|saguaro cactus",Softscape,Cactus,composite,ea,950.00,,,0,"Saguaro 5 ft, includes permit handling, delivery, and planting.",TRUE
+IRR-DRP-001,Drip Emitter 1gph,"drip emitter|1gph emitter",Irrigation,Drip,material,ea,1.25,,,0,"Pressure compensating 1 gph emitter.",TRUE
+IRR-DRP-002,1/2in Poly Drip Line,"drip line|poly tubing|1/2 inch drip",Irrigation,Drip,material,lin_ft,0.55,,,0,"1/2 inch polyethylene drip distribution line.",TRUE
+IRR-VAL-001,1in Anti-Siphon Valve,"valve|anti-siphon valve|irrigation valve",Irrigation,Valves,material,ea,42.00,65.00,ea,0,"1 in anti-siphon irrigation valve, residential.",TRUE
+IRR-CTL-001,Smart Controller 8-zone,"controller|smart controller|timer|hydrawise",Irrigation,Controllers,material,ea,285.00,95.00,ea,0,"WiFi smart irrigation controller, 8 zones.",TRUE
+IRR-INS-LAB,Drip System Install Labor,"drip install|irrigation install",Irrigation,Labor,labor,hr,,75.00,hr,0,"Skilled irrigation tech, install or repair drip systems.",TRUE
+LGT-LED-001,LED Path Light,"path light|landscape light|led path",Lighting,Path,material,ea,68.00,28.00,ea,0,"Low-voltage LED path light with stake.",TRUE
+LGT-TRN-001,Low-Voltage Transformer 300W,"transformer|low voltage transformer",Lighting,Power,material,ea,225.00,85.00,ea,0,"300W multi-tap landscape lighting transformer.",TRUE
+DMO-CON-001,Demo Concrete,"demo concrete|break concrete|concrete removal",Demolition,Concrete,labor,sq_ft,,3.25,sq_ft,0,"Break out and haul existing concrete up to 4 in thick.",TRUE
+DMO-SOD-001,Sod and Soil Removal,"remove sod|strip grass|sod removal",Demolition,Turf,labor,sq_ft,,0.95,sq_ft,0,"Strip and haul existing sod plus 2 in topsoil.",TRUE
+DMO-TRE-001,Tree Removal Small,"remove tree|tree removal small",Demolition,Trees,labor,ea,,225.00,ea,0,"Remove tree under 15 ft, grind stump.",TRUE
+DRN-CAT-001,Catch Basin 9in,"catch basin|drain basin",Drainage,Surface,material,ea,38.00,85.00,ea,0,"9 in square catch basin with grate.",TRUE
+DRN-PIP-001,4in Solid PVC Drain Pipe,"drain pipe|pvc drain|4 inch drain",Drainage,Pipe,material,lin_ft,3.25,4.50,lin_ft,0,"4 in solid SDR-35 PVC drain pipe, trenched and buried.",TRUE
+SVC-DSN-001,Design Consult,"design|design consult|consultation",Service,Design,labor,hr,,125.00,hr,0,"Landscape designer time, drawings and consultation.",TRUE
+SVC-PRM-001,City Permit Handling,"permit|city permit|permit handling",Service,Permits,labor,ea,,250.00,ea,0,"Pull and manage city of Phoenix permit, flat fee per quote.",TRUE
+SVC-MOB-001,Mobilization Fee,"mobilization|mobilization fee|trip charge",Service,Overhead,labor,ea,,350.00,ea,1,"One-time mobilization to bring crew and equipment on site.",TRUE
