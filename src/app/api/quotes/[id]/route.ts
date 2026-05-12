@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { updateOpportunityValue, uploadQuotePDFToOpportunity } from "@/lib/ghl";
+import { renderToBuffer } from "@react-pdf/renderer";
+import { QuotePDF, type PdfQuote } from "@/lib/quote-pdf";
+import { createElement } from "react";
 
 // GET /api/quotes/:id — full quote with sections + line items
 export async function GET(
@@ -14,6 +18,7 @@ export async function GET(
     .select(`
       id, status, client_name, site_address, scope_narrative,
       notes, terms_md, assumptions, subtotal, tax_rate, tax, total,
+      ghl_opportunity_id,
       quote_sections (
         id, title, sort_order,
         quote_line_items (
@@ -69,6 +74,7 @@ type PatchBody = {
   notes?: string;
   terms_md?: string;
   status?: "draft" | "final";
+  ghl_opportunity_id?: string | null;
   sections?: Array<{
     title: string;
     items: Array<{
@@ -95,6 +101,13 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json()) as PatchBody;
+
+  // Fetch current quote status so we can detect transition to "final"
+  const { data: currentQuote } = await supabase
+    .from("quotes")
+    .select("status, ghl_opportunity_id, client_name, site_address, scope_narrative, notes, terms_md, subtotal, tax_rate, tax, total, created_at")
+    .eq("id", id)
+    .single();
 
   // Compute totals if sections provided
   let totalsUpdate: Record<string, unknown> = {};
@@ -128,6 +141,7 @@ export async function PATCH(
       ...(body.notes !== undefined && { notes: body.notes }),
       ...(body.terms_md !== undefined && { terms_md: body.terms_md }),
       ...(body.status !== undefined && { status: body.status }),
+      ...(body.ghl_opportunity_id !== undefined && { ghl_opportunity_id: body.ghl_opportunity_id }),
       ...totalsUpdate,
       updated_at: new Date().toISOString(),
     })
@@ -166,6 +180,83 @@ export async function PATCH(
         );
         if (liErr) return NextResponse.json({ error: liErr.message }, { status: 500 });
       }
+    }
+  }
+
+  // GHL sync: when transitioning to "final" and an opportunity is linked
+  const goingFinal = body.status === "final" && currentQuote?.status !== "final";
+  const opportunityId = body.ghl_opportunity_id ?? currentQuote?.ghl_opportunity_id;
+
+  if (goingFinal && opportunityId) {
+    // Resolve final totals (either freshly computed or from DB)
+    const total = totalsUpdate.total
+      ? Number(totalsUpdate.total)
+      : Number(currentQuote?.total ?? 0);
+
+    try {
+      await updateOpportunityValue(opportunityId, total);
+    } catch (err) {
+      console.error("[GHL] opportunity value update failed:", err);
+      // Non-fatal — quote is already saved as final
+    }
+
+    // Generate PDF and upload to GHL
+    try {
+      const { data: fullQuote } = await supabase
+        .from("quotes")
+        .select(`
+          id, client_name, site_address, scope_narrative,
+          notes, terms_md, subtotal, tax_rate, tax, total, created_at,
+          quote_sections (
+            title, sort_order,
+            quote_line_items (
+              description, quantity, unit, unit_price, sort_order
+            )
+          )
+        `)
+        .eq("id", id)
+        .single();
+
+      if (fullQuote) {
+        const sections = [...(fullQuote.quote_sections ?? [])]
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((s) => ({
+            title: s.title,
+            items: [...(s.quote_line_items ?? [])]
+              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+              .map((i) => ({
+                description: i.description,
+                quantity: Number(i.quantity),
+                unit: i.unit,
+                unit_price: Number(i.unit_price),
+              })),
+          }));
+
+        const pdfQuote: PdfQuote = {
+          id: fullQuote.id,
+          client_name: fullQuote.client_name,
+          site_address: fullQuote.site_address,
+          scope_narrative: fullQuote.scope_narrative,
+          notes: fullQuote.notes,
+          terms_md: fullQuote.terms_md,
+          subtotal: fullQuote.subtotal,
+          tax_rate: fullQuote.tax_rate,
+          tax: fullQuote.tax,
+          total: fullQuote.total,
+          created_at: fullQuote.created_at,
+          sections,
+        };
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const buffer = await renderToBuffer(createElement(QuotePDF, { quote: pdfQuote }) as any);
+        const clientSlug = (fullQuote.client_name ?? "quote").replace(/\s+/g, "-").toLowerCase();
+        const filename = `greenscape-${clientSlug}-${id.slice(0, 8)}.pdf`;
+
+        await uploadQuotePDFToOpportunity(opportunityId, Buffer.from(buffer), filename);
+      }
+    } catch (err) {
+      console.error("[GHL] PDF upload failed:", err);
+      // Non-fatal
     }
   }
 

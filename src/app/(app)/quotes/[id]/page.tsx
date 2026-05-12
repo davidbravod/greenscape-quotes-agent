@@ -15,6 +15,7 @@ export default async function QuotePage({
     .select(`
       id, status, client_name, site_address, scope_narrative,
       notes, terms_md, assumptions, subtotal, tax_rate, tax, total,
+      ghl_opportunity_id,
       quote_sections (
         id, title, sort_order,
         quote_line_items (

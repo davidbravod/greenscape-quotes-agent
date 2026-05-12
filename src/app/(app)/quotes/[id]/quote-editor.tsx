@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +44,16 @@ type Quote = {
   tax_rate: number | null;
   tax: number | null;
   total: number | null;
+  ghl_opportunity_id: string | null;
   quote_sections: Section[];
+};
+
+type GHLOpportunity = {
+  id: string;
+  name: string;
+  monetaryValue: number;
+  status: string;
+  contact: { id: string; name: string; email: string } | null;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -65,6 +74,121 @@ function emptyItem(): LineItem {
   return { description: "", quantity: 1, unit: "ea", unit_price: 0, is_labor: false, is_ad_hoc: true };
 }
 
+// ── Opportunity picker ─────────────────────────────────────────────────────
+
+function OpportunityPicker({
+  opportunityId,
+  opportunityName,
+  onChange,
+  disabled,
+}: {
+  opportunityId: string | null;
+  opportunityName: string | null;
+  onChange: (id: string | null, name: string | null) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<GHLOpportunity[]>([]);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setLoading(true);
+      fetch(`/api/ghl/opportunities?q=${encodeURIComponent(query)}`)
+        .then((r) => r.json())
+        .then((data) => setResults(data.opportunities ?? []))
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false));
+    }, 350);
+  }, [query, open]);
+
+  function select(opp: GHLOpportunity) {
+    onChange(opp.id, opp.name);
+    setOpen(false);
+    setQuery("");
+  }
+
+  function clear(e: React.MouseEvent) {
+    e.stopPropagation();
+    onChange(null, null);
+  }
+
+  return (
+    <div className="relative">
+      <div
+        className={`flex items-center gap-2 text-sm border border-black/15 px-3 py-1.5 ${disabled ? "opacity-50" : "cursor-pointer hover:border-black/40"}`}
+        onClick={() => !disabled && setOpen((v) => !v)}
+      >
+        <span className="text-black/40 text-xs uppercase tracking-wide shrink-0">GHL</span>
+        {opportunityId ? (
+          <>
+            <span className="flex-1 truncate font-medium">{opportunityName ?? opportunityId}</span>
+            {!disabled && (
+              <button
+                onClick={clear}
+                className="text-black/30 hover:text-black text-lg leading-none"
+                title="Unlink opportunity"
+              >
+                ×
+              </button>
+            )}
+          </>
+        ) : (
+          <span className="flex-1 text-black/40">Link GHL opportunity…</span>
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-black/20 shadow-md">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name…"
+            className="w-full px-3 py-2 text-sm border-b border-black/10 outline-none"
+          />
+          <div className="max-h-56 overflow-y-auto">
+            {loading && (
+              <p className="px-3 py-2 text-sm text-black/40">Searching…</p>
+            )}
+            {!loading && results.length === 0 && (
+              <p className="px-3 py-2 text-sm text-black/40">No results</p>
+            )}
+            {results.map((opp) => (
+              <button
+                key={opp.id}
+                onClick={() => select(opp)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-black/5 flex items-center justify-between gap-4"
+              >
+                <span className="truncate">{opp.name}</span>
+                <span className="text-black/40 tabular-nums shrink-0 text-xs">
+                  {fmt(opp.monetaryValue ?? 0)}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="w-full text-left px-3 py-1.5 text-xs text-black/30 border-t border-black/10 hover:text-black"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function QuoteEditor({
@@ -79,6 +203,8 @@ export default function QuoteEditor({
   const [saving, setSaving] = useState(false);
   // null = closed, number = section index that has the picker open
   const [pickerSectionIdx, setPickerSectionIdx] = useState<number | null>(null);
+  // Resolved GHL opportunity name (for display after selection without a page reload)
+  const [ghlOpportunityName, setGhlOpportunityName] = useState<string | null>(null);
 
   const taxRate = Number(quote.tax_rate ?? 0);
   const { subtotal, tax, total } = computeTotals(quote.quote_sections, taxRate);
@@ -87,6 +213,12 @@ export default function QuoteEditor({
 
   function updateMeta<K extends keyof Quote>(key: K, value: Quote[K]) {
     setQuote((q) => ({ ...q, [key]: value }));
+    setDirty(true);
+  }
+
+  function setOpportunity(id: string | null, name: string | null) {
+    setQuote((q) => ({ ...q, ghl_opportunity_id: id }));
+    setGhlOpportunityName(name);
     setDirty(true);
   }
 
@@ -175,6 +307,7 @@ export default function QuoteEditor({
   // ── Save ─────────────────────────────────────────────────────────────────
 
   async function save(overrideStatus?: "draft" | "final") {
+    const goingFinal = overrideStatus === "final";
     setSaving(true);
     const res = await fetch(`/api/quotes/${quote.id}`, {
       method: "PATCH",
@@ -186,6 +319,7 @@ export default function QuoteEditor({
         notes: quote.notes,
         terms_md: quote.terms_md,
         status: overrideStatus ?? quote.status,
+        ghl_opportunity_id: quote.ghl_opportunity_id,
         sections: quote.quote_sections.map((s) => ({
           title: s.title,
           items: s.quote_line_items.map((i) => ({
@@ -205,7 +339,16 @@ export default function QuoteEditor({
       setDirty(false);
       if (overrideStatus) {
         setQuote((q) => ({ ...q, status: overrideStatus }));
-        toast.success(overrideStatus === "final" ? "Quote marked as final" : "Reverted to draft");
+        if (goingFinal) {
+          const hasOpportunity = !!quote.ghl_opportunity_id;
+          toast.success(
+            hasOpportunity
+              ? "Quote finalised — GHL opportunity updated & PDF uploaded"
+              : "Quote marked as final",
+          );
+        } else {
+          toast.success("Reverted to draft");
+        }
       } else {
         toast.success("Saved");
       }
@@ -267,7 +410,7 @@ export default function QuoteEditor({
                 onClick={() => save("final")}
                 disabled={saving}
               >
-                Mark as final
+                {saving ? "Saving…" : "Mark as final"}
               </Button>
             </>
           )}
@@ -280,6 +423,14 @@ export default function QuoteEditor({
           </Link>
         </div>
       </div>
+
+      {/* GHL opportunity */}
+      <OpportunityPicker
+        opportunityId={quote.ghl_opportunity_id}
+        opportunityName={ghlOpportunityName}
+        onChange={setOpportunity}
+        disabled={isFinal}
+      />
 
       {/* Assumptions panel */}
       {(quote.assumptions ?? []).length > 0 && (
