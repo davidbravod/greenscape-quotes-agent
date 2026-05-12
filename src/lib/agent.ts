@@ -3,51 +3,62 @@ import { QuoteDraft, type QuoteDraft as QuoteDraftType } from "@/lib/schemas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const DEFAULT_AGENT_MODEL = "anthropic/claude-sonnet-4-6";
-const MAX_TOOL_ITERATIONS = 20;
+const MAX_TOOL_ITERATIONS = 10;
 
-// ── Tool definitions (OpenAI function-calling format) ──────────────────────
+// ── Catalog types ──────────────────────────────────────────────────────────
+
+interface CatalogRow {
+  id: string;
+  sku: string;
+  name: string;
+  aliases: string | null;
+  category: string | null;
+  kind: string;
+  unit: string;
+  unit_price: number | null;
+  labor_rate: number | null;
+  labor_unit: string | null;
+}
+
+// ── Fetch full catalog ─────────────────────────────────────────────────────
+
+export async function fetchFullCatalog(supabase: SupabaseClient): Promise<CatalogRow[]> {
+  const { data, error } = await supabase
+    .from("catalog_items")
+    .select("id, sku, name, aliases, category, kind, unit, unit_price, labor_rate, labor_unit")
+    .eq("active", true)
+    .order("category")
+    .order("name");
+  if (error) throw new Error(`Failed to load catalog: ${error.message}`);
+  return (data ?? []) as CatalogRow[];
+}
+
+export function formatCatalogBlock(rows: CatalogRow[]): string {
+  const lines = rows.map((r) => {
+    const price = r.unit_price != null ? `$${r.unit_price}` : "-";
+    const labor = r.labor_rate != null ? `$${r.labor_rate}/${r.labor_unit ?? "unit"}` : "-";
+    const aliases = r.aliases ?? "";
+    return `${r.id}\t${r.sku}\t${r.name}\t${aliases}\t${r.category ?? ""}\t${r.kind}\t${r.unit}\t${price}\t${labor}`;
+  });
+  return [
+    "id\tsku\tname\taliases\tcategory\tkind\tunit\tunit_price\tlabor_rate",
+    ...lines,
+  ].join("\n");
+}
+
+// ── Tool definitions ───────────────────────────────────────────────────────
 
 const TOOLS = [
   {
     type: "function",
     function: {
-      name: "list_categories",
-      description:
-        "Returns every distinct category in the catalog. Call this first to understand what is available before searching.",
-      parameters: { type: "object", properties: {}, required: [] },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "search_catalog",
-      description:
-        "Fuzzy-searches the catalog by name or alias. Returns up to 10 matches with pricing. Use this to find the right catalog item for each material or task mentioned in the transcript.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "The material, plant, or service to search for (e.g. 'flagstone', 'drip emitter', 'fan palm')",
-          },
-          category: {
-            type: "string",
-            description: "Optional category filter to narrow results (e.g. 'Hardscape', 'Softscape', 'Irrigation')",
-          },
-        },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "get_item",
-      description: "Fetches the full details of a single catalog item by its UUID. Use this when you need to confirm pricing or labor details before placing a line item.",
+      description:
+        "Fetches full details of a single catalog item by its UUID. Use only when the catalog table above is ambiguous and you need to confirm something (e.g. min_qty, description).",
       parameters: {
         type: "object",
         properties: {
-          id: { type: "string", description: "The catalog item UUID" },
+          id: { type: "string", description: "The catalog item UUID from the catalog table" },
         },
         required: ["id"],
       },
@@ -57,75 +68,75 @@ const TOOLS = [
 
 // ── Tool execution ─────────────────────────────────────────────────────────
 
-type ToolArgs = Record<string, string | undefined>;
-
 async function executeTool(
   name: string,
-  args: ToolArgs,
+  args: Record<string, string | undefined>,
   supabase: SupabaseClient,
 ): Promise<string> {
-  if (name === "list_categories") {
-    const { data } = await supabase
-      .from("catalog_items")
-      .select("category")
-      .eq("active", true)
-      .not("category", "is", null)
-      .order("category");
-    const cats = [...new Set((data ?? []).map((r) => r.category as string))];
-    return JSON.stringify(cats);
-  }
-
-  if (name === "search_catalog") {
-    const q = args.query ?? "";
-    let query = supabase
-      .from("catalog_items")
-      .select("id, sku, name, aliases, category, kind, unit, unit_price, labor_rate, labor_unit, description")
-      .eq("active", true)
-      .or(`name.ilike.%${q}%,aliases.ilike.%${q}%`)
-      .limit(10);
-    if (args.category) query = query.eq("category", args.category);
-    const { data, error } = await query;
-    if (error) return JSON.stringify({ error: error.message });
-    return JSON.stringify(data ?? []);
-  }
-
   if (name === "get_item") {
     const { data, error } = await supabase
       .from("catalog_items")
-      .select("id, sku, name, category, kind, unit, unit_price, labor_rate, labor_unit, min_qty, description")
+      .select("id, sku, name, aliases, category, kind, unit, unit_price, labor_rate, labor_unit, min_qty, description")
       .eq("id", args.id ?? "")
       .single();
     if (error) return JSON.stringify({ error: error.message });
     return JSON.stringify(data);
   }
-
   return JSON.stringify({ error: `Unknown tool: ${name}` });
 }
 
 // ── System prompt ──────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a senior landscape and hardscape estimator for Greenscape Pro (Phoenix, AZ).
+export function buildSystemPrompt(catalogBlock: string): string {
+  return `You are a senior landscape and hardscape estimator for Greenscape Pro (Phoenix, AZ).
 Your job is to listen to a site-walk recording transcript and produce a professional, itemized quote draft.
 
-## Process
-1. Call list_categories to see what the catalog contains.
-2. For every material, plant, service, or task mentioned in the transcript, call search_catalog to find the matching catalog item. Use the aliases to help match slang or shorthand.
-3. If a search returns multiple plausible matches, call get_item on the most relevant one to confirm pricing.
-4. Estimate quantities from the transcript. If the estimator said "about 200 square feet of flagstone", use 200. If unclear, make a reasonable estimate and add it to assumptions_for_estimator_to_confirm.
-5. If no catalog item matches, set is_ad_hoc: true and leave catalog_item_id: null. Describe the item clearly and price it at 0 — the estimator will fill it in.
-6. Group line items into logical sections (e.g. Demolition, Hardscape, Softscape, Irrigation, Lighting).
+## FULL CATALOG
+Every active catalog item is in the TSV table below (columns: id, sku, name, aliases, category, kind, unit, unit_price, labor_rate).
+You MUST scan this table — every row — before deciding any item is not in the catalog.
 
-## Rules
-- NEVER invent a price. Always use unit_price and/or labor_rate from the catalog item.
-- For "material" kind items: unit_price is the all-in per-unit cost.
-- For "labor" kind items: unit_price should be labor_rate × estimated hours/units; set is_labor: true.
-- For "composite" kind items: unit_price is the all-in per-unit cost (already includes labor).
-- Always extract client_name and site_address from the transcript if the estimator mentioned them.
-- Write scope_narrative as a professional 2–4 sentence summary of the work for the client.
-- List every uncertainty, assumed quantity, or missing detail in assumptions_for_estimator_to_confirm.
+\`\`\`
+${catalogBlock}
+\`\`\`
+
+## How to match transcript items to catalog rows
+
+For each material, plant, service, or task the estimator mentions:
+
+1. **Alias check first (mandatory).** Lowercase the customer phrase. For each row, lowercase the aliases column and split by "|". Check whether any alias token is a substring of the customer phrase, or the customer phrase is a substring of any alias token. If exactly one row matches → use it (confidence = high). If multiple rows match → add all candidates to assumptions_for_estimator_to_confirm and let Marcus choose; do not pick.
+
+2. **Name/description fallback.** If zero alias matches, check the name and description columns for semantic similarity. If one row is clearly the right item → use it (confidence = high). If uncertain → flag as needs-review.
+
+3. **Ad-hoc only as last resort.** If zero rows match with any reasonable confidence after scanning every row: set is_ad_hoc: true, catalog_item_id: null, unit_price: 0. Describe the item clearly and add it to assumptions_for_estimator_to_confirm. NEVER call something ad-hoc without first having checked every alias in the table.
+
+4. **Verification pass (required before output).** After building every section, revisit each item you flagged as ad-hoc or needs-review. Re-scan the alias column one more time for each. If you find a match you missed, promote it to a catalog item.
+
+## Quantities and units
+
+- **Allowed units:** ea, sq_ft, lin_ft, cu_yd, ton, hr — use only these. Never invent new units.
+- **Ambiguous quantities:** If the estimator gave a range (e.g. "two to two and a half tons"), do NOT pick a number. Output both endpoints and add the item to assumptions_for_estimator_to_confirm for Marcus to decide.
+- Estimate quantities from context when a single clear number is stated. If truly unknown, use 0 and flag it.
+
+## Pricing rules
+
+- NEVER invent a price. Always use unit_price and/or labor_rate from the catalog row.
+- **material** kind: line_price = unit_price × quantity.
+- **labor** kind: set is_labor: true; unit_price = labor_rate × quantity (hours/units).
+- **composite** kind: unit_price is all-in (already includes labor); use it directly.
+
+## Notes discipline
+
+- Only add a note for genuine uncertainty or a flagged item.
+- Do NOT write notes that second-guess a line item you already priced correctly from the catalog.
+- Do NOT narrate your matching process in notes.
 
 ## Output
-When you are done with all tool calls, output ONLY a valid JSON object matching this schema — no markdown, no explanation:
+
+Extract client_name and site_address from the transcript if mentioned.
+Write scope_narrative as a professional 2–4 sentence summary.
+Group line items into logical sections (e.g. Demolition, Hardscape, Softscape, Irrigation, Lighting).
+
+When done, output ONLY a valid JSON object — no markdown, no explanation:
 
 {
   "client_name": string | null,
@@ -151,11 +162,11 @@ When you are done with all tool calls, output ONLY a valid JSON object matching 
   "terms_md": string,
   "assumptions_for_estimator_to_confirm": string[]
 }`;
+}
 
 // ── Main agent function ────────────────────────────────────────────────────
 
 function extractJson(content: string): string {
-  // Try to find a ```json block first, then fall back to raw content
   const match = content.match(/```(?:json)?\s*([\s\S]*?)```/);
   return match ? match[1].trim() : content.trim();
 }
@@ -167,11 +178,15 @@ export async function draftQuote(
 ): Promise<QuoteDraftType> {
   const model = agentModel ?? DEFAULT_AGENT_MODEL;
 
+  const catalogRows = await fetchFullCatalog(supabase);
+  const catalogBlock = formatCatalogBlock(catalogRows);
+  const systemPrompt = buildSystemPrompt(catalogBlock);
+
   const messages: ChatMessage[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     {
       role: "user",
-      content: `Here is the site-walk transcript. Please produce the quote draft.\n\n---\n${transcript}\n---`,
+      content: `Here is the site-walk transcript. Produce the quote draft.\n\n---\n${transcript}\n---`,
     },
   ];
 
@@ -190,16 +205,14 @@ export async function draftQuote(
     const msg = choice.message;
     messages.push({ role: "assistant", content: msg.content ?? "", tool_calls: msg.tool_calls });
 
-    // No tool calls → agent is done, parse the JSON output
     if (!msg.tool_calls || msg.tool_calls.length === 0) {
       const raw = extractJson(msg.content ?? "");
       const parsed = JSON.parse(raw);
       return QuoteDraft.parse(parsed);
     }
 
-    // Execute each tool call and feed results back
     for (const tc of msg.tool_calls) {
-      const args = JSON.parse(tc.function.arguments ?? "{}") as ToolArgs;
+      const args = JSON.parse(tc.function.arguments ?? "{}") as Record<string, string | undefined>;
       const result = await executeTool(tc.function.name, args, supabase);
       messages.push({
         role: "tool",

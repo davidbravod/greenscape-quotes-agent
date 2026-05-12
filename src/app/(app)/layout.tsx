@@ -34,6 +34,7 @@ export default async function AppLayout({
             {isAdmin && (
               <>
                 <Link href="/admin/catalog" className="hover:underline">Catalog</Link>
+                <Link href="/admin/agent" className="hover:underline">Agent</Link>
                 <Link href="/admin/settings" className="hover:underline">Settings</Link>
                 <Link href="/admin/users" className="hover:underline">Users</Link>
               </>
