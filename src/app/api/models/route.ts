@@ -7,8 +7,10 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type") === "transcription" ? "transcription" : "text";
 
+  // For transcription we use /chat/completions with base64 audio, so we need
+  // models that accept audio input (input_modalities=audio), not whisper-only models.
   const models = await listModels(
-    type === "transcription" ? { outputModality: "transcription" } : undefined,
+    type === "transcription" ? { inputModality: "audio" } : undefined,
   );
 
   // For text/agent models, only keep those with tool-calling support (architecture hint)

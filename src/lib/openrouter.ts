@@ -22,10 +22,10 @@ export type OpenRouterModel = {
 };
 
 export async function listModels(opts?: {
-  outputModality?: "text" | "transcription" | "image";
+  inputModality?: "audio" | "image" | "text";
 }): Promise<OpenRouterModel[]> {
-  const qs = opts?.outputModality
-    ? `?output_modalities=${opts.outputModality}`
+  const qs = opts?.inputModality
+    ? `?input_modalities=${opts.inputModality}`
     : "";
   const res = await fetch(`${BASE}/models${qs}`, { headers: headers() });
   if (!res.ok) throw new Error(`OpenRouter models: ${res.status}`);
@@ -33,32 +33,60 @@ export async function listModels(opts?: {
   return json.data;
 }
 
+function mimeToFormat(mime: string): string {
+  if (mime.includes("mp4") || mime.includes("m4a")) return "mp4";
+  if (mime.includes("ogg")) return "ogg";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3";
+  if (mime.includes("wav")) return "wav";
+  return "webm";
+}
+
 export async function transcribe(args: {
   model: string;
   audio: Blob | ArrayBuffer;
   mimeType?: string;
 }): Promise<{ text: string; raw: unknown }> {
-  // OpenRouter supports OpenAI-compatible audio/transcriptions for STT-capable models.
-  const form = new FormData();
-  const blob =
-    args.audio instanceof Blob
-      ? args.audio
-      : new Blob([args.audio], { type: args.mimeType ?? "audio/webm" });
-  form.append("file", blob, "audio");
-  form.append("model", args.model);
+  // OpenRouter routes audio through /chat/completions with base64-encoded audio
+  // content parts. The /audio/transcriptions multipart endpoint is unreliable on
+  // OpenRouter regardless of Content-Type headers sent.
+  const mimeType = args.mimeType ?? "audio/webm";
+  const format = mimeToFormat(mimeType);
 
-  const res = await fetch(`${BASE}/audio/transcriptions`, {
+  const arrayBuffer =
+    args.audio instanceof Blob
+      ? await args.audio.arrayBuffer()
+      : args.audio;
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+
+  const body = {
+    model: args.model,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_audio",
+            input_audio: { data: base64, format },
+          },
+          {
+            type: "text",
+            text: "Transcribe this audio recording verbatim. Return only the transcription text with no commentary, headings, or formatting.",
+          },
+        ],
+      },
+    ],
+    temperature: 0,
+  };
+
+  const res = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "",
-      "X-Title": process.env.OPENROUTER_APP_NAME ?? "Greenscape Quotes Agent",
-    },
-    body: form,
+    headers: headers(),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`OpenRouter transcribe: ${res.status} ${await res.text()}`);
-  const json = (await res.json()) as { text: string };
-  return { text: json.text, raw: json };
+  const json = (await res.json()) as { choices: { message: { content: string } }[] };
+  const text = json.choices?.[0]?.message?.content ?? "";
+  return { text, raw: json };
 }
 
 export type ChatMessage = {

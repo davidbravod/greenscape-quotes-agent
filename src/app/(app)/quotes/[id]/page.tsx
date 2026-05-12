@@ -1,13 +1,42 @@
+import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
+import QuoteEditor from "./quote-editor";
+
 export default async function QuotePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Quote {id.slice(0, 8)}</h1>
-      <p className="text-sm text-black/60">Editable quote view — coming next.</p>
-    </div>
-  );
+  const supabase = await createClient();
+
+  const { data: quote } = await supabase
+    .from("quotes")
+    .select(`
+      id, status, client_name, site_address, scope_narrative,
+      notes, terms_md, assumptions, subtotal, tax_rate, tax, total,
+      quote_sections (
+        id, title, sort_order,
+        quote_line_items (
+          id, catalog_item_id, description, quantity, unit,
+          unit_price, line_total, is_labor, is_ad_hoc, sort_order
+        )
+      )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (!quote) notFound();
+
+  // Sort sections and items by sort_order before passing to client
+  const sections = [...(quote.quote_sections ?? [])]
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((s) => ({
+      ...s,
+      quote_line_items: [...(s.quote_line_items ?? [])].sort(
+        (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+      ),
+    }));
+
+  return <QuoteEditor initialQuote={{ ...quote, quote_sections: sections }} />;
 }

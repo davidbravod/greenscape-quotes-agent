@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { transcribe } from "@/lib/openrouter";
 import { draftQuote } from "@/lib/agent";
 
-const DEFAULT_STT_MODEL = "openai/whisper-large-v3";
+const DEFAULT_STT_MODEL = "openai/gpt-4o-audio-preview";
 
 export async function runRecordingPipeline(recordingId: string) {
   const supabase = createServiceClient();

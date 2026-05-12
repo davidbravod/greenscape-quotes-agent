@@ -71,8 +71,9 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
           ))}
         </select>
         <p className="text-xs text-black/50">
-          Fetched from OpenRouter with <code>output_modalities=transcription</code>.
-          Default: <code>openai/whisper-large-v3</code>
+          Fetched from OpenRouter with <code>input_modalities=audio</code> — multimodal
+          models only (e.g. gpt-4o-audio-preview, gemini-flash). Default:{" "}
+          <code>openai/gpt-4o-audio-preview</code>
         </p>
       </div>
 
