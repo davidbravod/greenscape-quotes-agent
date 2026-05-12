@@ -19,15 +19,11 @@ export type OpenRouterModel = {
     input_modalities?: string[];
     output_modalities?: string[];
   };
+  supported_parameters?: string[];
 };
 
-export async function listModels(opts?: {
-  inputModality?: "audio" | "image" | "text";
-}): Promise<OpenRouterModel[]> {
-  const qs = opts?.inputModality
-    ? `?input_modalities=${opts.inputModality}`
-    : "";
-  const res = await fetch(`${BASE}/models${qs}`, { headers: headers() });
+export async function listModels(): Promise<OpenRouterModel[]> {
+  const res = await fetch(`${BASE}/models`, { headers: headers() });
   if (!res.ok) throw new Error(`OpenRouter models: ${res.status}`);
   const json = (await res.json()) as { data: OpenRouterModel[] };
   return json.data;
