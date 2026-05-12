@@ -12,18 +12,30 @@ type Quote = {
   created_at: string;
 };
 
-export default function QuotesList({ initial }: { initial: Quote[] }) {
+export default function QuotesList({
+  initial,
+  userId,
+  isAdmin,
+}: {
+  initial: Quote[];
+  userId: string;
+  isAdmin: boolean;
+}) {
   const [quotes, setQuotes] = useState<Quote[]>(initial);
 
   useEffect(() => {
     const supabase = createClient();
 
     async function refresh() {
-      const { data } = await supabase
+      let query = supabase
         .from("quotes")
         .select("id, client_name, status, total, created_at")
         .order("created_at", { ascending: false })
         .limit(20);
+      if (!isAdmin) {
+        query = query.eq("created_by", userId);
+      }
+      const { data } = await query;
       if (data) setQuotes(data);
     }
 
