@@ -28,6 +28,14 @@ export default async function QuotePage({
 
   if (!quote) notFound();
 
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user!.id)
+    .single();
+  const isAdmin = profile?.role === "admin";
+
   // Sort sections and items by sort_order before passing to client
   const sections = [...(quote.quote_sections ?? [])]
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -38,5 +46,5 @@ export default async function QuotePage({
       ),
     }));
 
-  return <QuoteEditor initialQuote={{ ...quote, quote_sections: sections }} />;
+  return <QuoteEditor initialQuote={{ ...quote, quote_sections: sections }} isAdmin={isAdmin} />;
 }

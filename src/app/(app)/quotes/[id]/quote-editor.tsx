@@ -2,12 +2,12 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import Link from "next/link";
+import CatalogPicker, { type PickedItem } from "./catalog-picker";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -67,10 +67,18 @@ function emptyItem(): LineItem {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function QuoteEditor({ initialQuote }: { initialQuote: Quote }) {
+export default function QuoteEditor({
+  initialQuote,
+  isAdmin = false,
+}: {
+  initialQuote: Quote;
+  isAdmin?: boolean;
+}) {
   const [quote, setQuote] = useState<Quote>(initialQuote);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  // null = closed, number = section index that has the picker open
+  const [pickerSectionIdx, setPickerSectionIdx] = useState<number | null>(null);
 
   const taxRate = Number(quote.tax_rate ?? 0);
   const { subtotal, tax, total } = computeTotals(quote.quote_sections, taxRate);
@@ -121,6 +129,19 @@ export default function QuoteEditor({ initialQuote }: { initialQuote: Quote }) {
       return { ...q, quote_sections: sections };
     });
     setDirty(true);
+  }, []);
+
+  const addFromCatalog = useCallback((sIdx: number, picked: PickedItem) => {
+    setQuote((q) => {
+      const sections = q.quote_sections.map((s, si) =>
+        si === sIdx
+          ? { ...s, quote_line_items: [...s.quote_line_items, picked] }
+          : s,
+      );
+      return { ...q, quote_sections: sections };
+    });
+    setDirty(true);
+    setPickerSectionIdx(null);
   }, []);
 
   const removeItem = useCallback((sIdx: number, iIdx: number) => {
@@ -182,9 +203,9 @@ export default function QuoteEditor({ initialQuote }: { initialQuote: Quote }) {
     setSaving(false);
     if (res.ok) {
       setDirty(false);
-      if (overrideStatus === "final") {
-        setQuote((q) => ({ ...q, status: "final" }));
-        toast.success("Quote marked as final");
+      if (overrideStatus) {
+        setQuote((q) => ({ ...q, status: overrideStatus }));
+        toast.success(overrideStatus === "final" ? "Quote marked as final" : "Reverted to draft");
       } else {
         toast.success("Saved");
       }
@@ -221,6 +242,16 @@ export default function QuoteEditor({ initialQuote }: { initialQuote: Quote }) {
           <Badge variant={isFinal ? "default" : "outline"}>
             {isFinal ? "Final" : "Draft"}
           </Badge>
+          {isFinal && isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => save("draft")}
+              disabled={saving}
+            >
+              Back to draft
+            </Button>
+          )}
           {!isFinal && (
             <>
               <Button
@@ -383,12 +414,30 @@ export default function QuoteEditor({ initialQuote }: { initialQuote: Quote }) {
             </div>
 
             {!isFinal && (
-              <button
-                onClick={() => addItem(sIdx)}
-                className="text-sm text-black/40 hover:text-black"
-              >
-                + Add item
-              </button>
+              <div className="space-y-2">
+                {pickerSectionIdx === sIdx ? (
+                  <CatalogPicker
+                    onSelect={(picked) => addFromCatalog(sIdx, picked)}
+                    onCancel={() => setPickerSectionIdx(null)}
+                  />
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setPickerSectionIdx(sIdx)}
+                      className="text-sm text-black/40 hover:text-black"
+                    >
+                      + From catalog
+                    </button>
+                    <span className="text-black/20">|</span>
+                    <button
+                      onClick={() => addItem(sIdx)}
+                      className="text-sm text-black/40 hover:text-black"
+                    >
+                      + Ad hoc
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         ))}
